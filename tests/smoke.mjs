@@ -32,7 +32,7 @@ try {
   await page.evaluate(() => localStorage.setItem('splpro-prototype-v32', JSON.stringify({
     role: 'administrator<script>', selectedOrderId: '\"><img src=x onerror=alert(1)>',
     projects: [{ id: '\" onmouseover=alert(1)', name: '<img src=x onerror=alert(1)>', address: 42, stage: 'hot evil', owner: {}, potential: 0, ordered: -10 }],
-    calculations: [{ number: '\" onclick=alert(1)', projectId: 'missing', product: 'Насосная станция SPL', url: 'javascript:alert(1)', source: 'evil', status: 'Согласован' }],
+    calculations: [{ number: '\" onclick=alert(1)', projectId: 'missing', product: 'Насосная станция SPL', url: 'javascript:alert(1)', source: 'evil', createdBy: '<img src=x onerror="window.xssProof=9">', status: 'Согласован' }],
     selectionRequests: [{ id: 'SEL-XSS', projectId: 'missing', product: '<img src=x onerror="window.xssProof=1">', input: '<svg onload="window.xssProof=2">', expectation: '<img src=x onerror="window.xssProof=3">', owner: '<img src=x onerror="window.xssProof=7">', dueAt: '<svg onload="window.xssProof=8">', slaDays: 999, version: -4, status: '<img>', updates: [{ id: 'UPD-XSS', text: '<img src=x onerror="window.xssProof=4">', date: '<svg>' }] }],
     orders: [{ id: '\" class=evil', projectId: 'missing', product: '<svg onload=alert(1)>', amount: 'NaN', ready: {}, paid: 500, paymentStatus: '<img src=x onerror="window.xssProof=5">', supplyStatus: '<svg onload="window.xssProof=6">', reserveUntil: '<img>', debt: 'Infinity', status: '<img>', tag: 'evil', actions: 'bad' }],
     shipments: [{ id: 'SHP-XSS', orderId: 'missing', date: '<img src=x onerror="window.xssProof=1">.08', contact: {}, address: '<img>', status: '<svg>', tag: 'evil' }],
@@ -69,9 +69,27 @@ try {
 
   // Подбор выполняется только внешними конфигураторами; результат импортируется в ЛК.
   await page.click('[data-page="calculations"]');
+  assert.match(await page.locator('#page-calculations h2').textContent(), /Мои подборы/);
+  assert.equal(await page.locator('#startNewSelection').getAttribute('target'), '_blank');
+  assert.match(await page.locator('#startNewSelection').getAttribute('href'), /splpro\.ru\/selections/);
   assert.match(await page.locator('[data-configurator="station"]').getAttribute('href'), /splpro\.ru\/selections\/station/);
   assert.equal(await page.locator('[data-configurator="station"]').getAttribute('target'), '_blank');
   assert.equal(await page.locator('.configurator[data-status="planned"]').count() > 0, true);
+
+  // История текущего пользователя доступна в ЛК; любой непривязанный подбор связывается с объектом из портфеля.
+  const unlinkedSelection = page.locator('[data-selection-row="ST-26398"]');
+  assert.match(await unlinkedSelection.textContent(), /Не привязан/);
+  const testProjectId = await page.evaluate(() => JSON.parse(localStorage.getItem('splpro-prototype-v32')).projects.find(item => item.name === 'ЖК «Тестовый квартал»').id);
+  await unlinkedSelection.locator('[data-selection-project]').selectOption({ label: 'ЖК «Тестовый квартал»' });
+  await unlinkedSelection.locator('[data-bind-selection]').click();
+  const linkedSelection = await page.evaluate(() => JSON.parse(localStorage.getItem('splpro-prototype-v32')).calculations.find(item => item.number === 'ST-26398'));
+  assert.equal(linkedSelection.projectId, testProjectId);
+  assert.match(await page.locator('[data-selection-row="ST-26398"]').textContent(), /ЖК «Тестовый квартал»/);
+
+  const beforeSync = await page.locator('#calculationsBody tr').count();
+  await page.click('#refreshMySelections');
+  assert.equal(await page.locator('#calculationsBody tr').count(), beforeSync + 1);
+  assert.match(await page.locator('#calculationsBody tr').first().textContent(), /Не привязан|Новый/);
 
   // Дорожная карта 3.2-2: заявка хранит исходные данные, SLA и дополнения в той же версии цепочки.
   const initialSelectionRequests = await page.locator('#selectionRequestsBody tr').count();
@@ -151,6 +169,27 @@ try {
     await page.click('#calculationDialog [data-close-dialog]');
   }
   assert.doesNotMatch(await page.locator('#calculationsBody').textContent(), /EXT-BAD-PATH|EXT-BAD-PRODUCT/);
+
+  // UI нельзя обойти поддельной option: согласованный, но непривязанный подбор не создаёт заказ.
+  await page.evaluate(() => {
+    const value = JSON.parse(localStorage.getItem('splpro-prototype-v32'));
+    value.calculations.unshift({ number: 'FORGED-UNLINKED', projectId: '', product: 'Насосная станция SPL', url: 'https://splpro.ru/selections/station?result=FORGED-UNLINKED', source: 'splpro.ru', createdBy: 'Нияз Гарипов', status: 'Согласован', version: 'v1', importedAt: new Date().toISOString() });
+    localStorage.setItem('splpro-prototype-v32', JSON.stringify(value));
+  });
+  await page.reload({ waitUntil: 'networkidle' });
+  const ordersBeforeForgedSubmit = await page.evaluate(() => JSON.parse(localStorage.getItem('splpro-prototype-v32')).orders.length);
+  await page.evaluate(() => {
+    const select = document.querySelector('#orderCalculation');
+    select.append(new Option('FORGED-UNLINKED', 'FORGED-UNLINKED'));
+    select.value = 'FORGED-UNLINKED';
+    document.querySelector('#orderDeliveryAddress').value = 'г. Москва, тестовый адрес';
+    document.querySelector('#orderDraftDialog').showModal();
+    document.querySelector('#orderDraftForm').requestSubmit();
+  });
+  const ordersAfterForgedSubmit = await page.evaluate(() => JSON.parse(localStorage.getItem('splpro-prototype-v32')).orders.length);
+  assert.equal(ordersAfterForgedSubmit, ordersBeforeForgedSubmit);
+  assert.match(await page.locator('#toast').textContent(), /привязанного и согласованного результата/);
+  await page.click('#orderDraftDialog [data-close-dialog]');
 
   // Кнопка строки передаёт в черновик именно выбранный, а не первый результат.
   await page.click('[data-create-order="AQ-26452"]');
@@ -292,6 +331,12 @@ try {
       assert.ok(dimensions.scrollWidth <= dimensions.innerWidth, `${pageName} overflow at ${width}px: ${JSON.stringify(dimensions)}`);
     }
   }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${baseURL}#calculations`, { waitUntil: 'networkidle' });
+  const mobileBindBox = await page.locator('[data-selection-row="ST-26398"] [data-bind-selection]').boundingBox();
+  assert.ok(mobileBindBox && mobileBindBox.x >= 0 && mobileBindBox.x + mobileBindBox.width <= 390, `bind action outside mobile viewport: ${JSON.stringify(mobileBindBox)}`);
+  const mobileActionBoxes = await page.locator('[data-selection-row="ST-26481"] button').evaluateAll(buttons => buttons.map(button => { const box = button.getBoundingClientRect(); return { text: button.textContent.trim(), x: box.x, right: box.right, width: box.width }; }));
+  assert.ok(mobileActionBoxes.every(box => box.x >= 0 && box.right <= 390), `selection actions outside mobile viewport: ${JSON.stringify(mobileActionBoxes)}`);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${baseURL}#dashboard`, { waitUntil: 'networkidle' });
   assert.equal(await page.locator('.role-switcher').isVisible(), true);
