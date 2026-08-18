@@ -123,6 +123,54 @@ const roleData = {
 };
 const titles = { dashboard: ['Обзор', 'Обзор портфеля'], projects: ['Объекты', 'Портфель объектов'], calculations: ['Мои подборы', 'Мои подборы'], orders: ['Заказы', 'Заказы и обязательства'], production: ['Производство', 'Производственный процесс'], shipments: ['Поставки', 'Поставки и отгрузки'], documents: ['Документы', 'Документы'], service: ['Сервис', 'Сервис и обращения'], journey: ['Стадии объекта', 'Дорожная карта 3.2-2'], analytics: ['Аналитика', 'Показатели портфеля'] };
 
+const actionHelpById = {
+  brandHome: 'Логотип кабинета. Вернёт на главный экран «Обзор».', mobileMenu: 'Мобильное меню. Покажет или скроет разделы кабинета.', notificationButton: 'Центр уведомлений. Покажет задачи и события, требующие внимания.', profileButton: 'Профиль пользователя. Покажет сведения о текущей учётной записи и роли.', createProjectButton: 'Создание объекта. Откроет форму добавления объекта в портфель.', resetProjectFilters: 'Сброс фильтров. Вернёт полный перечень доступных объектов.', startNewSelection: 'Новый подбор. Откроет конфигураторы SPLPRO в новой вкладке.', refreshMySelections: 'Обновление истории. Запросит новые подборы текущего пользователя.', importCalculationButton: 'Резервное добавление. Откроет форму ввода номера или ссылки результата.', dashboardImportCalculation: 'Импорт результата. Откроет резервную форму добавления подбора.', createSelectionRequestButton: 'Инженерная заявка. Откроет форму для нестандартного решения.', createOrderButton: 'Создание заказа. Откроет форму выбора согласованного результата.', syncNow: 'Сверка с 1С. Обновит демонстрационную проекцию заказов и статусов.', requestReserveButton: 'Запрос резерва. Передаст запрос ответственному без обещания наличия.', openOrderDocuments: 'Документы заказа. Перейдёт к связанным документам.', openOrderService: 'Вопрос по заказу. Откроет форму обращения в SPLPRO.', requestShipmentButton: 'Запрос отгрузки. Откроет форму с заказом, датой и адресом.', uploadDocumentButton: 'Загрузка документа. Откроет форму добавления файла и его связи.', createServiceButton: 'Новое обращение. Откроет форму вопроса или сервисной заявки.', openRoadmapSource: 'Источник регламента. Покажет, какая версия дорожной карты учтена.', exportAnalyticsButton: 'Экспорт аналитики. Скачает текущие показатели в безопасном CSV-файле.', closeDrawer: 'Закрытие уведомлений. Скроет боковую панель без изменения данных.'
+};
+const actionHelpByText = {
+  'Создать объект': 'Создание объекта. Откроет форму добавления объекта в портфель.', 'Запросить поставку': 'Планирование поставки. Откроет форму запроса отгрузки по заказу.', 'Открыть конфигураторы': 'Работа с подборами. Перейдёт к истории и внешним конфигураторам.', 'Импортировать': 'Импорт результата. Проверит номер и ссылку и добавит подбор в историю.', 'Создать заявку': 'Инженерная заявка. Сохранит исходные данные и назначит SLA.', 'Сохранить новую версию': 'Дополнение заявки. Сохранит данные в той же заявке и увеличит версию.', 'Создать черновик': 'Черновик заказа. Создаст его только из привязанного согласованного результата.', 'Отправить запрос': 'Запрос отгрузки. Сохранит желаемую дату, адрес и контакт.', 'Добавить документ': 'Добавление документа. Сохранит карточку выбранного файла в прототипе.', 'Создать обращение': 'Новое обращение. Сохранит вопрос и покажет его в журнале сервиса.', 'Закрыть': 'Закрытие окна. Вернёт к текущему экрану без выполнения действия.', 'Сбросить': 'Сброс фильтров. Вернёт полный список записей.', 'Запросить резерв': 'Запрос резерва. Передаст команду и будет ожидать подтверждение 1С.', 'Запросить отгрузку': 'Запрос отгрузки. Откроет форму планирования поставки.', 'Загрузить документ': 'Загрузка документа. Откроет форму добавления файла.', 'Экспорт CSV': 'Экспорт аналитики. Скачает таблицу показателей в формате CSV.'
+};
+let actionTooltipTrigger = null;
+const shortActionLabel = element => (element.getAttribute('aria-label') || element.textContent || 'действие').trim().replace(/\s+/g, ' ').slice(0, 64);
+function describeAction(element) {
+  const text = shortActionLabel(element); let help = actionHelpById[element.id] || actionHelpByText[text];
+  if (!help && element.dataset.page) help = `Раздел «${titles[element.dataset.page]?.[0] || text}». Откроет соответствующий экран кабинета.`;
+  else if (!help && element.dataset.goto) help = `Переход по кабинету. Откроет раздел «${titles[element.dataset.goto]?.[0] || text}».`;
+  else if (!help && element.dataset.attentionAction) help = `Действие клиента. Отметит задачу «${element.dataset.attentionAction}» выполненной.`;
+  else if (!help && (element.dataset.dashboardStage || element.dataset.projectStage || element.dataset.stage)) help = 'Стадия объекта. Откроет описание этапа, ответственных и следующих действий.';
+  else if (!help && element.dataset.bindSelection) help = 'Связь подбора с объектом. Сохранит выбранный объект из доступного портфеля.';
+  else if (!help && element.dataset.calculationApprove) help = 'Согласование подбора. Зафиксирует решение по текущей версии результата.';
+  else if (!help && element.dataset.calculationReturn) help = 'Возврат на доработку. Изменит статус результата и сохранит дату решения.';
+  else if (!help && element.dataset.createOrder) help = 'Создание заказа. Откроет черновик для привязанного и согласованного результата.';
+  else if (!help && element.dataset.selectionUpdate) help = 'Дополнение заявки. Откроет форму новых исходных данных и увеличения версии.';
+  else if (!help && element.dataset.selectionAdvance) help = 'Статус заявки. Переведёт инженерную заявку на следующий этап процесса.';
+  else if (!help && element.dataset.orderId) help = 'Карточка заказа. Покажет сроки, оплату, резерв, действия и документы.';
+  else if (!help && element.dataset.notificationOrder) help = 'Уведомление по заказу. Откроет связанный заказ и требуемое действие.';
+  else if (!help && element.dataset.documentCategory) help = 'Категория документов. Отфильтрует журнал по выбранному типу.';
+  else if (!help && element.dataset.downloadDocument) help = 'Карточка документа. Скачает текстовое описание выбранной записи.';
+  else if (!help && element.dataset.configurator) help = 'Внешний конфигуратор. Откроет сайт подбора оборудования в новой вкладке.';
+  else if (!help && element.tagName === 'A' && element.closest('#calculationsBody')) help = 'Результат подбора. Откроет исходный результат на доверенном внешнем сайте.';
+  else if (!help && element.tagName === 'A' && /^https?:/i.test(element.href)) help = `Внешняя ссылка «${text}». Откроет связанный сайт в новой вкладке.`;
+  else if (!help) help = `Кнопка «${text}». Выполнит указанное действие в текущем разделе кабинета.`;
+  if (element.disabled) help += ` Сейчас недоступно: ${element.title || 'сначала выполните обязательный предыдущий шаг'}.`;
+  return help;
+}
+function annotateActionHelp(root = document) {
+  const elements = root.matches?.('button, a[href]') ? [root] : [...root.querySelectorAll('button, a[href]')];
+  elements.forEach(element => { element.dataset.actionHelp = describeAction(element); if (element === actionTooltipTrigger && byId('actionTooltip').getAttribute('aria-hidden') === 'false') { byId('actionTooltip').textContent = element.dataset.actionHelp; positionActionTooltip(element); } });
+}
+function positionActionTooltip(trigger) {
+  const tooltip = byId('actionTooltip'); const triggerBox = trigger.getBoundingClientRect(); const tooltipBox = tooltip.getBoundingClientRect(); const gap = 8; const margin = 8;
+  const left = Math.min(Math.max(triggerBox.left + triggerBox.width / 2 - tooltipBox.width / 2, margin), window.innerWidth - tooltipBox.width - margin);
+  let top = triggerBox.bottom + gap; if (top + tooltipBox.height > window.innerHeight - margin) top = triggerBox.top - tooltipBox.height - gap; top = Math.min(Math.max(top, margin), window.innerHeight - tooltipBox.height - margin);
+  tooltip.style.left = `${left}px`; tooltip.style.top = `${top}px`;
+}
+function showActionTooltip(trigger) {
+  if (!trigger) return; annotateActionHelp(trigger); const tooltip = byId('actionTooltip'); actionTooltipTrigger = trigger; tooltip.textContent = trigger.dataset.actionHelp; tooltip.setAttribute('aria-hidden', 'false'); tooltip.classList.add('visible'); trigger.setAttribute('aria-describedby', 'actionTooltip'); positionActionTooltip(trigger);
+}
+function hideActionTooltip(trigger = actionTooltipTrigger) {
+  if (trigger) trigger.removeAttribute('aria-describedby'); const tooltip = byId('actionTooltip'); tooltip.classList.remove('visible'); tooltip.setAttribute('aria-hidden', 'true'); actionTooltipTrigger = null;
+}
+
 function toast(message) { const element = byId('toast'); element.textContent = message; element.classList.add('show'); clearTimeout(window.toastTimer); window.toastTimer = setTimeout(() => element.classList.remove('show'), 2300); }
 function openDialog(id) { populateFormOptions(); byId(id).showModal(); }
 function closeDialog(dialog) { dialog.close(); }
@@ -140,6 +188,7 @@ function renderRole() {
   const data = roleData[state.role];
   byId('roleSelect').value = state.role; byId('roleEyebrow').textContent = data.eyebrow; byId('welcomeTitle').textContent = data.title; byId('welcomeText').textContent = data.text; byId('primaryAction').textContent = data.action; byId('attentionSummary').textContent = data.attention;
   byId('attentionActions').innerHTML = data.actions.map(action => `<button data-attention-action="${escapeHtml(action)}">${escapeHtml(action)}</button>`).join('');
+  annotateActionHelp(byId('primaryAction')); annotateActionHelp(byId('attentionActions'));
   const activeProjects = state.projects.filter(project => project.stage !== 'done').length;
   const orderTotal = state.orders.reduce((sum, order) => sum + order.amount, 0);
   const pending = state.orders.flatMap(order => order.actions).filter(action => !action.done).length;
@@ -297,4 +346,14 @@ byId('notificationList').addEventListener('click', event => { const button = eve
 function downloadBlob(blob, filename) { const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = filename; document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(link.href), 1000); }
 byId('exportAnalyticsButton').addEventListener('click', () => { const rows = [['Тип', 'Номер', 'Название/статус', 'Значение'], ...state.projects.map(project => ['Объект', project.id, project.name, stages[project.stage].name]), ...state.orders.map(order => ['Заказ', order.id, projectName(order.projectId), order.status]), ...state.shipments.map(item => ['Поставка', item.id, item.orderId, item.status])]; const csvCell = value => { const text = String(value); const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text; return `"${safe.replaceAll('"', '""')}"`; }; const csv = '\uFEFF' + rows.map(row => row.map(csvCell).join(';')).join('\r\n'); downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `splpro-analytics-${new Date().toISOString().slice(0, 10)}.csv`); });
 
-const initialPage = titles[location.hash.slice(1)] ? location.hash.slice(1) : 'dashboard'; renderAll(); goTo(initialPage);
+document.addEventListener('pointerover', event => { const trigger = event.target.closest?.('button, a[href]'); if (trigger && trigger !== actionTooltipTrigger) showActionTooltip(trigger); });
+document.addEventListener('pointerout', event => { const trigger = event.target.closest?.('button, a[href]'); if (trigger && !trigger.contains(event.relatedTarget)) hideActionTooltip(trigger); });
+document.addEventListener('focusin', event => { const trigger = event.target.closest?.('button, a[href]'); if (trigger) showActionTooltip(trigger); });
+document.addEventListener('focusout', event => { const trigger = event.target.closest?.('button, a[href]'); if (trigger) hideActionTooltip(trigger); });
+document.addEventListener('keydown', event => { if (event.key === 'Escape') hideActionTooltip(); });
+document.addEventListener('click', () => hideActionTooltip());
+window.addEventListener('resize', () => actionTooltipTrigger ? positionActionTooltip(actionTooltipTrigger) : null);
+window.addEventListener('scroll', () => { const trigger = actionTooltipTrigger; if (!trigger) return; requestAnimationFrame(() => { if (actionTooltipTrigger !== trigger) return; if (trigger.matches(':hover') || document.activeElement === trigger) positionActionTooltip(trigger); else hideActionTooltip(trigger); }); }, true);
+new MutationObserver(records => records.forEach(record => record.addedNodes.forEach(node => { if (node.nodeType === Node.ELEMENT_NODE) annotateActionHelp(node); }))).observe(document.body, { childList: true, subtree: true });
+
+const initialPage = titles[location.hash.slice(1)] ? location.hash.slice(1) : 'dashboard'; renderAll(); goTo(initialPage); annotateActionHelp();

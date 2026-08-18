@@ -319,6 +319,42 @@ try {
   const csv = await readFile(await safeDownload.path(), 'utf8');
   for (const marker of ["'=CMD()", "'+CMD()", "'-CMD()", "'@CMD()", "'\tCMD()", "'\rCMD()"]) assert.ok(csv.includes(marker), `CSV marker missing: ${JSON.stringify(marker)}`);
 
+  // Каждая кнопка и ссылка получает краткую справку; она доступна мышью и клавиатурой.
+  const missingActionHelp = await page.evaluate(() => [...document.querySelectorAll('button, a[href]')]
+    .filter(element => !element.dataset.actionHelp || element.dataset.actionHelp.trim().length < 24)
+    .map(element => ({ tag: element.tagName, id: element.id, text: element.textContent.trim().slice(0, 60) })));
+  assert.deepEqual(missingActionHelp, []);
+  await page.click('[data-page="calculations"]');
+  await page.locator('#startNewSelection').hover();
+  assert.match(await page.locator('#actionTooltip').textContent(), /конфигуратор|новой вкладке/i);
+  assert.equal(await page.locator('#actionTooltip').getAttribute('aria-hidden'), 'false');
+  await page.locator('[data-bind-selection]').first().focus();
+  assert.match(await page.locator('#actionTooltip').textContent(), /объект/i);
+  await page.locator('#notificationButton').focus();
+  assert.match(await page.locator('#actionTooltip').textContent(), /уведомлен/i);
+
+  // Справка динамической главной кнопки обновляется вместе с ролью и её действием.
+  await page.click('[data-page="dashboard"]');
+  await page.selectOption('#roleSelect', 'developer');
+  await page.locator('#primaryAction').hover();
+  assert.match(await page.locator('#actionTooltip').textContent(), /объект/i);
+  await page.selectOption('#roleSelect', 'contractor');
+  await page.locator('#primaryAction').hover();
+  assert.match(await page.locator('#actionTooltip').textContent(), /поставк/i);
+  assert.doesNotMatch(await page.locator('#actionTooltip').textContent(), /создание объекта/i);
+  await page.selectOption('#roleSelect', 'designer');
+  await page.locator('#primaryAction').hover();
+  assert.match(await page.locator('#actionTooltip').textContent(), /конфигуратор/i);
+
+  // Tooltip остаётся целиком в мобильном viewport даже у крайних элементов.
+  await page.click('[data-page="calculations"]');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('[data-selection-row="ST-26398"] [data-bind-selection]').hover();
+  await page.waitForTimeout(120);
+  assert.equal(await page.locator('#actionTooltip').getAttribute('aria-hidden'), 'false');
+  const tooltipBox = await page.locator('#actionTooltip').boundingBox();
+  assert.ok(tooltipBox && tooltipBox.x >= 8 && tooltipBox.x + tooltipBox.width <= 382 && tooltipBox.y >= 8 && tooltipBox.y + tooltipBox.height <= 836, `tooltip outside viewport: ${JSON.stringify(tooltipBox)}`);
+
   // Все рабочие страницы не имеют корневого горизонтального переполнения на 390 и 320 px.
   const mobileChecks = {};
   for (const width of [390, 320]) {
